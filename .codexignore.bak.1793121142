@@ -1,8 +1,0 @@
-# Lu par l'agent (tkn). .gitignore ne suffit pas : il regit git, pas les lectures.
-node_modules/
-dist/
-build/
-coverage/
-.venv/
-target/
-__pycache__/

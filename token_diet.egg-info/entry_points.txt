@@ -1,2 +1,0 @@
-[console_scripts]
-tkn = tkn.cli:main

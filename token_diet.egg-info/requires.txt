@@ -1,6 +1,0 @@
-
-[dev]
-pytest>=8
-
-[exact]
-tiktoken>=0.7
