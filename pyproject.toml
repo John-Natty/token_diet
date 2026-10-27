@@ -1,0 +1,25 @@
+[project]
+name = "token-diet"
+version = "0.2.0"
+description = "Comprendre et reduire le contexte inutile envoye a un agent de code"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+dependencies = []
+
+[project.optional-dependencies]
+exact = ["tiktoken>=0.7"]
+dev = ["pytest>=8"]
+
+[project.scripts]
+tkn = "tkn.cli:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["tkn*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

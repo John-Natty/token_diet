@@ -1,0 +1,22 @@
+# pip install 'litellm[proxy]'
+# litellm --config configs/litellm.yaml --port 4000
+model_list:
+  - model_name: default
+    litellm_params:
+      model: openai/gpt-6.1-sol
+      api_key: os.environ/OPENAI_API_KEY
+  - model_name: escalate
+    litellm_params:
+      model: openai/gpt-6-astra
+      api_key: os.environ/OPENAI_API_KEY
+  - model_name: cheap
+    litellm_params:
+      model: deepseek/deepseek-chat
+      api_key: os.environ/DEEPSEEK_API_KEY
+
+litellm_settings:
+  cache: true
+  cache_params:
+    type: local
+    ttl: 600
+  drop_params: true

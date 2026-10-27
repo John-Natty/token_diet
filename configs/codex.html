@@ -1,0 +1,10 @@
+# ~/.codex/config.toml
+model = "gpt-6.1-sol"           # Astra uniquement a l'escalade
+model_reasoning_effort = "low"   # pas de "none" ni "minimal" sur cette famille
+model_max_output_tokens = 3000
+
+# Ne declare que les MCP reellement utilises : chacun ajoute son schema
+# d'outils a CHAQUE requete.
+# [mcp_servers.filesystem]
+# command = "npx"
+# args = ["-y", "@modelcontextprotocol/server-filesystem", "."]

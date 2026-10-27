@@ -1,0 +1,178 @@
+#!/usr/bin/env python3
+"""Installe les garde-fous. Deux profils, parce que "strict" n'est pas
+toujours mieux : c'est une hypothese a tester, pas une doctrine.
+
+Usage: python -m tkn.init [chemin] [--profil equilibre|strict]
+                          [--agents codex,generic] [--force]
+"""
+from __future__ import annotations
+import argparse
+import shutil
+import stat
+import time
+from pathlib import Path
+
+COMMUN = """## Sortie
+- Diff uniquement (`git diff`). Jamais de code inchange recopie.
+- Anglais telegraphique si tu expliques : pas d'articles, pas de pronoms.
+- Plafond : 3000 tokens de sortie.
+
+## Lecture
+- Ne relis un fichier que s'il a change ou s'il est sorti de ta fenetre.
+- Explore avec `rg`, pas en ouvrant les fichiers.
+- Carte de symboles : `INDEX.md` (prefixes `L<n>` = numeros de ligne).
+"""
+
+STRICT = """# Regles agent (profil strict)
+
+%s
+- Zero prose. Pas de "Voici", pas de resume final, pas de commentaire evident.
+- Lis uniquement les lignes indiquees. Ne relis jamais un fichier inchange.
+- Noms courts.
+
+## Contexte
+- Stable en tete, variable a la fin. Le cache en depend.
+- Ne franchis pas 272k tokens de contexte. Compacte avant.
+
+## Session
+- Toutes les 10 demandes : ecris `HANDOFF.md` (60 lignes max) puis repars a neuf.
+- Un message = plusieurs modifications groupees.
+
+## Modele
+- Defaut : `gpt-6.1-sol`, effort `low`.
+- Escalade Astra si Sol echoue 2 fois sur la meme contrainte.
+
+## Interdits
+- Pas de reformatage (prettier / ruff le font).
+- Pas de reecriture de fichier entier.
+""" % COMMUN
+
+EQUILIBRE = """# Regles agent (profil equilibre)
+
+%s
+- Deux ou trois lignes d'explication si le changement n'est pas evident.
+- Relis le fichier apres modification si tu as touche plus de 3 endroits.
+- Noms explicites ; abrège seulement ce qui est evident dans le domaine.
+
+## Contexte
+- Contexte stable en tete, variable a la fin.
+- Au-dela de 272k tokens, compacte.
+
+## Session
+- `HANDOFF.md` quand tu changes de sujet.
+
+## Modele
+- Defaut : `gpt-6.1-sol`, effort `low`.
+- Astra a l'escalade, apres deux echecs sur la meme contrainte.
+
+## Interdits
+- Pas de reformatage.
+""" % COMMUN
+
+PRE_COMMIT = """#!/usr/bin/env bash
+set -uo pipefail
+fail=0
+for f in AGENTS.md CLAUDE.md .cursorrules HANDOFF.md; do
+  [ -f "$f" ] || continue
+  n=$(wc -l < "$f" | tr -d ' ')
+  [ "$n" -gt 60 ] && { echo "tkn: $f = $n lignes (seuil 60)"; fail=1; }
+done
+while read -r f; do
+  case "$f" in *.lock|*.map|*.min.js|*.min.css) continue ;; esac
+  [ -f "$f" ] || continue
+  n=$(wc -l < "$f" | tr -d ' ')
+  [ "$n" -gt 300 ] && echo "tkn: $f = $n lignes, a decouper"
+done < <(git diff --cached --name-only --diff-filter=ACM)
+exit $fail
+"""
+
+COMMIT_MSG = """#!/usr/bin/env bash
+set -uo pipefail
+msg=$(head -n1 "$1")
+if [ "${#msg}" -lt 25 ]; then
+  echo "tkn: message de commit trop court (${#msg} car.)"
+  echo "     le commit sert de memoire a l'agent : dis ce qui a change et pourquoi."
+  exit 1
+fi
+"""
+
+# Doit couvrir exactement SHOULD_IGNORE de tkn/audit.py, sinon l'audit ne
+# sera jamais vert apres un init.
+IGNORE_CONTENT = """# Lu par l'agent (tkn). .gitignore ne suffit pas : il regit git, pas les lectures.
+.git/
+node_modules/
+dist/
+build/
+coverage/
+.venv/
+target/
+__pycache__/
+"""
+
+AGENT_FILES = {
+    "codex": ".codexignore",
+    "cursor": ".cursorignore",
+    "aider": ".aiderignore",
+    "cline": ".clineignore",
+    "roo": ".rooignore",
+    "generic": ".ignore",
+}
+
+
+def put(path: Path, content: str, force: bool) -> str:
+    if path.exists():
+        if not force:
+            return "conserve"
+        backup = path.with_name(f"{path.name}.bak.{int(time.time())}")
+        shutil.copy2(path, backup)
+        status = f"remplace ({backup.name})"
+    else:
+        status = "ecrit"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(content)
+    return status
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(prog="tkn init")
+    ap.add_argument("path", nargs="?", default=".")
+    ap.add_argument("--profil", choices=["equilibre", "strict"], default="equilibre")
+    ap.add_argument("--agents", default="codex,generic",
+                    help="fichiers d'ignore a creer, separes par des virgules "
+                         f"({', '.join(AGENT_FILES)})")
+    ap.add_argument("--force", action="store_true")
+    a = ap.parse_args()
+    root = Path(a.path).resolve()
+
+    body = STRICT if a.profil == "strict" else EQUILIBRE
+    print(put(root / "AGENTS.md", body, a.force), "-> AGENTS.md")
+    print(put(root / "HANDOFF.md",
+              "# HANDOFF\n\nEtat :\nReste a faire :\nDecisions :\nFichiers :\n",
+              a.force), "-> HANDOFF.md")
+
+    wanted = [AGENT_FILES[x.strip()] for x in a.agents.split(",")
+              if x.strip() in AGENT_FILES]
+    if not wanted:
+        print(f"aucun agent reconnu dans '{a.agents}'")
+    for name in wanted:
+        print(put(root / name, IGNORE_CONTENT, a.force), f"-> {name}")
+
+    hooks = root / ".git" / "hooks"
+    if hooks.is_dir():
+        x = stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH
+        for name, content in (("pre-commit", PRE_COMMIT), ("commit-msg", COMMIT_MSG)):
+            target = hooks / name
+            status = put(target, content, a.force)
+            target.chmod(target.stat().st_mode | x)
+            print(status, f"-> {name}")
+        print("  (un hook existant est sauvegarde, jamais ecrase en silence)")
+    else:
+        print("pas de .git/ -> hooks ignores")
+
+    print(f"\nprofil : {a.profil} | agents : {', '.join(wanted) or 'aucun'}")
+    print("ensuite : python3 -m tkn.cli audit . && python3 -m tkn.cli index .")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
