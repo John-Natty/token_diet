@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Garde-fous tokens (token-diet).
+# Garde-fous tokens (token-diet). Doit rester identique a tkn/init.py:PRE_COMMIT.
 set -uo pipefail
 
 fail=0

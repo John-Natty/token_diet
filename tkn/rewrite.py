@@ -11,17 +11,32 @@ TEXT_TYPES = {"text", "input_text", "output_text"}
 TOOL_ROLES = {"tool", "function"}
 TOOL_TYPES = {"function_call_output", "tool_result"}
 
+MIN_KEEP = 20   # en dessous, un marqueur coute plus qu'il n'explique
+
 
 def strip_ansi(text: str) -> str:
     return ANSI.sub("", text)
 
 
 def truncate(text: str, limit: int) -> tuple[str, bool]:
+    """La sortie ne depasse JAMAIS limit, marqueur compris."""
     if len(text) <= limit:
         return text, False
-    half = limit // 2
-    return (f"{text[:half]}\n[... {len(text) - limit} caracteres tronques ...]\n"
-            f"{text[-half:]}"), True
+
+    marker = f"\n[... {len(text) - limit} caracteres tronques ...]\n"
+    keep = limit - len(marker)
+    if keep < MIN_KEEP:
+        return text[:limit], True
+
+    # deuxieme passe : le compte reel de caracteres retires
+    marker = f"\n[... {len(text) - keep} caracteres tronques ...]\n"
+    keep = limit - len(marker)
+    if keep < MIN_KEEP:
+        return text[:limit], True
+
+    head = keep // 2
+    tail = keep - head
+    return f"{text[:head]}{marker}{text[-tail:]}", True
 
 
 def fp(text: str) -> str:

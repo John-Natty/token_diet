@@ -23,3 +23,21 @@ def test_seuil_de_lignes_respecte(tmp_path):
     text = build(tmp_path, max_lines=25, budget=10_000)
     assert len(text.splitlines()) <= 25
     assert "seuil de lignes atteint" in text
+
+
+def test_fichiers_omis_sont_rapportes(tmp_path):
+    for i in range(40):
+        (tmp_path / f"f{i:02d}.py").write_text("def f():\n    pass\n")
+    omitted: list[str] = []
+    build(tmp_path, max_lines=10_000, budget=60, omitted=omitted)
+    assert omitted
+    assert all(o.endswith(".py") for o in omitted)
+
+
+def test_source_avant_tests(tmp_path):
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "tests" / "a.py").write_text("def t():\n    pass\n")
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "b.py").write_text("def b():\n    pass\n")
+    text = build(tmp_path, 10_000, 10_000)
+    assert text.index("src/b.py") < text.index("tests/a.py")

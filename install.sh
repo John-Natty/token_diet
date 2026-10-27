@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Installe les hooks token-diet dans le depot courant.
+# Installe les hooks token-diet dans un depot.
+# Usage: ./install.sh [chemin]
 set -euo pipefail
 
 root="$(cd "$(dirname "$0")" && pwd)"
@@ -10,9 +11,11 @@ hooks="$target/.git/hooks"
 mkdir -p "$hooks"
 
 for h in pre-commit commit-msg; do
-  ln -sf "$root/hooks/$h" "$hooks/$h"
   chmod +x "$root/hooks/$h"
+  ln -sf "$root/hooks/$h" "$hooks/$h"
   echo "hook installe : $h"
 done
 
-echo "hooks token-diet actifs dans $target"
+echo
+echo "les hooks pointent vers $root/hooks/"
+echo "controle : head -1 hooks/pre-commit  (doit afficher #!/usr/bin/env bash)"

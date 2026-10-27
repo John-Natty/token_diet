@@ -4,84 +4,6 @@ Carte de symboles generee par `tkn index`. Ne pas editer a la main.
 Les prefixes `L<n>` sont des numeros de ligne : demande les plages
 precises a l'agent plutot que de lui faire relire les fichiers.
 
-### tests/conftest.py
-```
-L1 import pathlib
-L2 import sys
-```
-
-### tests/test_audit.py
-```
-L1 from tkn.audit import DEFAULTS, audit, render
-L4 def test_consigne_positive_est_signalee_comme_ambigue(tmp_path)
-L12 def test_negation_est_detectee(tmp_path)
-L20 def test_fichiers_d_ignore_listes_comme_presents(tmp_path)
-L26 def test_une_consigne_ambigue_ne_couvre_pas(tmp_path)
-L32 def test_handoff_est_on_demand_pas_injected(tmp_path)
-L41 def test_ligne_commentee_ne_protege_pas(tmp_path)
-L47 def test_render_regroupe_les_regles_identiques(tmp_path)
-L55 def test_index_est_exclu_du_total(tmp_path)
-L63 def test_init_couvre_tout_ce_que_l_audit_reclame(tmp_path)
-```
-
-### tests/test_bench.py
-```
-L1 from tkn.bench import aggregate, by_label
-L4 def _row(run, model = 'gpt-6.1-sol', inp = 10000)
-L9 def test_une_tache_n_est_pas_une_requete()
-L17 def test_resultat_de_test_porte_par_le_run()
-L25 def test_tarif_inconnu_rend_le_cout_non_concluant()
-L31 def test_requetes_hors_run_sont_isolees()
-L39 def test_tache_non_evaluee_compte_a_part()
-```
-
-### tests/test_compress.py
-```
-L1 from tkn.compress import py_signatures
-L4 def test_decorateur_de_niveau_principal_conserve()
-L9 def test_annotations_defauts_et_separateurs_conserves()
-L17 def test_numero_de_ligne_present()
-L22 def test_methode_de_classe_conservee()
-```
-
-### tests/test_count.py
-```
-L1 from tkn.count import plan_fixed, plan_growth
-L4 def test_reinjection_d_un_fichier_fixe_est_lineaire()
-L8 def test_croissance_est_geometrique_et_superieure()
-L12 def test_croissance_nulle_egale_le_lineaire()
-```
-
-### tests/test_index.py
-```
-L1 from tkn.index import build
-L4 def test_le_break_arrete_vraiment(tmp_path)
-L12 def test_bloc_markdown_jamais_ouvert_a_la_fin(tmp_path)
-L20 def test_seuil_de_lignes_respecte(tmp_path)
-```
-
-### tests/test_proxy.py
-```
-L1 import copy
-L3 from tkn.rewrite import fp, rewrite
-L6 def _stats()
-L10 def test_system_message_is_never_modified()
-L23 def test_ansi_untouched_outside_tool_messages()
-L29 def test_list_content_of_user_message_is_untouched()
-L36 def test_ansi_scope_all_extends_to_user_messages()
-L42 def test_fingerprint_detects_middle_difference()
-```
-
-### tests/test_rates.py
-```
-L1 import pytest
-L3 from tkn import rates
-L6 def test_modele_inconnu_renvoie_none()
-L10 def test_tarif_d_ecriture_de_cache_est_utilise()
-L16 def test_luna_en_credits_reste_inconnu()
-L20 def test_fmt_affiche_un_point_d_interrogation()
-```
-
 ### tkn/__init__.py
 ```
 ```
@@ -182,13 +104,95 @@ L94 def _cost(total_in: float, model: str | None, table: dict) -> None
 
 ### tkn/index.py
 ```
-L8 from __future__ import annotations
-L9 import argparse
-L10 from pathlib import Path
-L12 from tkn.audit import DEFAULTS
-L13 from tkn.compress import PY, CLIKE, compress_text, clip, iter_sources
-L16 def build(root: Path, max_lines: int, budget: int) -> str
-L49 def main() -> int
+L9 from __future__ import annotations
+L10 import argparse
+L11 from pathlib import Path
+L13 from tkn.audit import DEFAULTS
+L14 from tkn.compress import PY, CLIKE, compress_text, clip, iter_sources
+L17 def _rank(p: Path, root: Path) -> tuple[int, str]
+L17     """Sources d'abord, tests ensuite."""
+L23 def build(root: Path, max_lines: int, budget: int, omitted: list | None = None) -> str
+L64 def main() -> int
 ```
 
-... [seuil de lignes atteint, tkn/init.py et suivants omis] ...
+### tkn/init.py
+```
+L8 from __future__ import annotations
+L9 import argparse
+L10 import shutil
+L11 import stat
+L12 import time
+L13 from pathlib import Path
+L122 def put(path: Path, content: str, force: bool) -> str
+L136 def main() -> int
+```
+
+### tkn/proxy.py
+```
+L11 from __future__ import annotations
+L12 import argparse
+L13 import json
+L14 import os
+L15 import time
+L16 import urllib.error
+L17 import urllib.request
+L18 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+L19 from pathlib import Path
+L21 from tkn.rewrite import rewrite
+L28 def current_run() -> str
+L35 def _extract_usage(payload: bytes) -> dict | None
+L67 def _fields(u: dict) -> tuple[int, int, int, int, int]
+L79 def record(payload: bytes, label: str, req: dict | None, stats: dict, mode: str) -> None
+L100 class Handler(BaseHTTPRequestHandler)
+L107     def log_message(self, fmt, *args)
+L111     def do_GET(self)
+L114     def do_POST(self)
+L117     def _forward(self, method: str) -> None
+L175     def _relay(self, resp, label, req_data, stats) -> None
+L195 def main() -> int
+```
+
+### tkn/rates.py
+```
+L6 from __future__ import annotations
+L7 import json
+L8 import os
+L9 from pathlib import Path
+L35 def user_path() -> Path
+L39 def load() -> dict
+L55 def cost(entry: dict, kind: str = 'credits') -> float | None
+L55     """Cout d'une entree. None si le tarif du modele est inconnu."""
+L74 def fmt(value: float | None, width: int = 10, digits: int = 2) -> str
+```
+
+### tkn/report.py
+```
+L6 from __future__ import annotations
+L7 import argparse
+L8 import json
+L9 import os
+L10 from collections import defaultdict
+L11 from pathlib import Path
+L13 from tkn import rates
+L18 def log_path() -> Path
+L22 def read_log(path = None) -> list[dict]
+L38 def show_stats(a) -> int
+L59 def main() -> int
+```
+
+### tkn/rewrite.py
+```
+L5 from __future__ import annotations
+L6 import hashlib
+L7 import re
+L17 def strip_ansi(text: str) -> str
+L21 def truncate(text: str, limit: int) -> tuple[str, bool]
+L21     """La sortie ne depasse JAMAIS limit, marqueur compris."""
+L42 def fp(text: str) -> str
+L42     """Empreinte du contenu COMPLET, pas d'echantillons."""
+L47 def is_tool(msg: dict) -> bool
+L51 def rewrite_text(text: str, limit: int, stats: dict) -> str
+L64 def rewrite(data: dict, limit: int, stats: dict, ansi_scope: str = 'tool') -> dict
+```
+
+... [seuil de lignes atteint, 10 omis] ...
