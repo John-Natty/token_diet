@@ -1,7 +1,23 @@
+# Python
 .venv/
+venv/
 __pycache__/
+*.py[cod]
 *.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Build
 build/
 dist/
-.pytest_cache/
+
+# Outils
 .tkn/
+*.bak.*
+
+# Editeurs
+.idea/
+.vscode/
+*.swp
+.DS_Store
