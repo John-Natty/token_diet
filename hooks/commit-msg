@@ -1,10 +1,8 @@
 #!/usr/bin/env bash
-# Le message de commit sert de memoire a l'agent : exige qu'il soit exploitable.
 set -uo pipefail
-
 msg=$(head -n1 "$1")
 if [ "${#msg}" -lt 25 ]; then
   echo "tkn: message de commit trop court (${#msg} car.)"
-  echo "     dis ce qui a change et pourquoi, pas 'fix' ou 'wip'."
+  echo "     le commit sert de memoire a l'agent : dis ce qui a change et pourquoi."
   exit 1
 fi

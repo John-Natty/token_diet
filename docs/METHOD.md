@@ -4,14 +4,16 @@
 
 Aucune mesure necessaire : ce sont des multiplicateurs tarifaires.
 
-- Astra : 250 credits/1M entree, 1250 sortie. Sol : 50 et 250. Meme travail,
-  cinq fois moins cher.
-- Au-dela de 272 000 tokens d'entree, la requete ENTIERE double de tarif.
-- Entree en cache : ~10 % de l'entree fraiche. Mais une ecriture en cache
-  coute plus cher qu'une entree fraiche : ne cache que ce que tu reutilises.
-- Le cache expire en 5-10 minutes. Travaille en rafales.
+- Credits Standard : Astra 250/25/1250, Sol 50/2,5/250 et Luna
+  2,5/0,25/12,5 par million de tokens entree/cache/sortie.
+- Tarifs API separes : au-dela de 272 000 tokens d'entree, multiplicateur x2
+  sur entree, cache et ecriture de cache, x1,5 sur sortie.
+- Selon le modele, l'entree en cache coute 5 a 10 % de l'entree fraiche.
+  Une ecriture en cache coute plus cher qu'une entree fraiche : ne cache que
+  ce que tu reutilises.
 - Les tokens de raisonnement sont factures en sortie.
-- Fast : x2,5. Ultrafast : x8, et inaccessible sur Plus meme avec des credits.
+- Credits achetes : Fast x2 et Ultrafast x6. Usage inclus : Fast x2,5 et
+  Ultrafast x8. La disponibilite depend du modele et du plan.
 
 ## A mesurer
 

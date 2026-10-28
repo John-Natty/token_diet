@@ -6,7 +6,7 @@ Distingue trois choses que l'on confond souvent :
   - une consigne DECLAREE dans un fichier (avec le texte de la ligne)
   - un comportement OBSERVE (via le journal d'usage)
 
-Usage: python -m tkn.audit [chemin] [--json] [--verbose] [--config seuils.json]
+Usage: python -m tkn.audit [chemin] [--check] [--json] [--verbose]
 """
 from __future__ import annotations
 import argparse
@@ -213,11 +213,18 @@ def render(r: dict, verbose: bool = False) -> str:
     return "\n".join(L)
 
 
+def has_failures(r: dict) -> bool:
+    """Vrai quand --check doit rendre l'audit bloquant."""
+    return bool(r["findings"] or r["uncovered_paths"] or r["index_missing"])
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(prog="tkn audit")
     ap.add_argument("path", nargs="?", default=".")
     ap.add_argument("--json", action="store_true")
     ap.add_argument("--verbose", action="store_true")
+    ap.add_argument("--check", action="store_true",
+                    help="retourne 1 si l'audit trouve un probleme")
     ap.add_argument("--config", default=None)
     a = ap.parse_args()
 
@@ -228,7 +235,7 @@ def main() -> int:
     r = audit(Path(a.path), cfg)
     print(json.dumps(r, indent=2, ensure_ascii=False) if a.json
           else render(r, a.verbose))
-    return 0
+    return 1 if a.check and has_failures(r) else 0
 
 
 if __name__ == "__main__":
