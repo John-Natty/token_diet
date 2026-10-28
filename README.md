@@ -22,8 +22,9 @@ minimum de tokens par réponse.
 multiplicateurs tarifaires :
 
 - Astra coûte 5× Sol par token, en entrée comme en sortie
-- au-delà de 272k tokens d'entrée, la requête entière double de tarif
-- l'entrée en cache coûte ~10 % de l'entrée fraîche
+- pour l'API au-delà de 272k tokens d'entrée : ×2 sur entrée, cache et
+  écriture de cache, ×1,5 sur sortie
+- selon le modèle, l'entrée en cache coûte 5 à 10 % de l'entrée fraîche
 - une écriture en cache coûte plus cher qu'une entrée fraîche
 
 **À mesurer** — ce sont des hypothèses, pas des règles. Voir `docs/TESTED.md` :
@@ -35,13 +36,13 @@ zéro prose, noms courts, ne pas relire, dialecte compressé.
     cd token-diet
     pip install -e .          # optionnel
     pip install -e '.[exact]' # tiktoken, pour un comptage non estimé
-    pytest -q                 # 24 tests
+    pytest -q
 
 ## Commandes
 
 | Commande | Effet |
 |---|---|
-| `tkn audit [chemin]` | Constats mesurables, en lecture seule |
+| `tkn audit [chemin]` | Constats mesurables, en lecture seule (`--check` pour bloquer) |
 | `tkn count <fichiers>` | Tokens, avec réinjection ou simulation de croissance |
 | `tkn compress <fichier>` | Signatures seules, préfixées par leur numéro de ligne |
 | `tkn index [chemin]` | Génère `INDEX.md` |

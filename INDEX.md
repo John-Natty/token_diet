@@ -24,7 +24,9 @@ L72 def walk(root: Path)
 L81 def count_lines(p: Path) -> int
 L89 def audit(root: Path, cfg: dict) -> dict
 L154 def render(r: dict, verbose: bool = False) -> str
-L216 def main() -> int
+L216 def has_failures(r: dict) -> bool
+L216     """Vrai quand --check doit rendre l'audit bloquant."""
+L221 def main() -> int
 ```
 
 ### tkn/bench.py
@@ -131,25 +133,32 @@ L136 def main() -> int
 ```
 L11 from __future__ import annotations
 L12 import argparse
-L13 import json
-L14 import os
-L15 import time
-L16 import urllib.error
-L17 import urllib.request
-L18 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-L19 from pathlib import Path
-L21 from tkn.rewrite import rewrite
-L28 def current_run() -> str
-L35 def _extract_usage(payload: bytes) -> dict | None
-L67 def _fields(u: dict) -> tuple[int, int, int, int, int]
-L79 def record(payload: bytes, label: str, req: dict | None, stats: dict, mode: str) -> None
-L100 class Handler(BaseHTTPRequestHandler)
-L107     def log_message(self, fmt, *args)
-L111     def do_GET(self)
-L114     def do_POST(self)
-L117     def _forward(self, method: str) -> None
-L175     def _relay(self, resp, label, req_data, stats) -> None
-L195 def main() -> int
+L13 import http.client
+L14 import json
+L15 import os
+L16 import time
+L17 import urllib.error
+L18 import urllib.request
+L19 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+L20 from pathlib import Path
+L22 from tkn.rewrite import rewrite
+L31 def current_run() -> str
+L38 def _usage_from_obj(obj: dict, previous: dict | None = None) -> dict | None
+L50 class _SSEUsageParser()
+L53     def __init__(self) -> None
+L57     def feed(self, chunk: bytes) -> None
+L66     def finish(self) -> None
+L71     def _line(self, line: bytes) -> None
+L85 def _extract_usage(payload: bytes) -> dict | None
+L100 def _fields(u: dict) -> tuple[int, int, int, int, int]
+L112 def record(payload: bytes, label: str, req: dict | None, stats: dict, mode: str, usage_info: dict | None = None) -> None
+L134 class Handler(BaseHTTPRequestHandler)
+L141     def log_message(self, fmt, *args)
+L145     def do_GET(self)
+L148     def do_POST(self)
+L151     def _forward(self, method: str) -> None
+L209     def _relay(self, resp, label, req_data, stats) -> None
+L235 def main() -> int
 ```
 
 ### tkn/rates.py
@@ -158,11 +167,11 @@ L6 from __future__ import annotations
 L7 import json
 L8 import os
 L9 from pathlib import Path
-L35 def user_path() -> Path
-L39 def load() -> dict
-L55 def cost(entry: dict, kind: str = 'credits') -> float | None
-L55     """Cout d'une entree. None si le tarif du modele est inconnu."""
-L74 def fmt(value: float | None, width: int = 10, digits: int = 2) -> str
+L39 def user_path() -> Path
+L43 def load() -> dict
+L59 def cost(entry: dict, kind: str = 'credits') -> float | None
+L59     """Cout d'une entree. None si le tarif du modele est inconnu."""
+L80 def fmt(value: float | None, width: int = 10, digits: int = 2) -> str
 ```
 
 ### tkn/report.py
@@ -180,19 +189,4 @@ L38 def show_stats(a) -> int
 L59 def main() -> int
 ```
 
-### tkn/rewrite.py
-```
-L5 from __future__ import annotations
-L6 import hashlib
-L7 import re
-L17 def strip_ansi(text: str) -> str
-L21 def truncate(text: str, limit: int) -> tuple[str, bool]
-L21     """La sortie ne depasse JAMAIS limit, marqueur compris."""
-L42 def fp(text: str) -> str
-L42     """Empreinte du contenu COMPLET, pas d'echantillons."""
-L47 def is_tool(msg: dict) -> bool
-L51 def rewrite_text(text: str, limit: int, stats: dict) -> str
-L64 def rewrite(data: dict, limit: int, stats: dict, ansi_scope: str = 'tool') -> dict
-```
-
-... [seuil de lignes atteint, 10 omis] ...
+... [seuil de lignes atteint, 11 omis] ...

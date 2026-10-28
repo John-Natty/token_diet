@@ -11,7 +11,14 @@ jobs:
           python-version: '3.12'
       - run: pip install -e '.[dev]'
       - run: pytest -q
-      - run: python -m tkn.audit .
+      - run: git diff-tree --check -r HEAD
+      - run: python -m tkn.audit . --check
+      - name: artefacts locaux absents de l'index
+        run: |
+          if git ls-files | grep -E '(^|/)(\.venv|__pycache__|[^/]+\.egg-info)(/|$)|\.bak\.'; then
+            echo "::error::des artefacts locaux sont suivis par Git"
+            exit 1
+          fi
       - name: fichiers auto-injectes sous le seuil
         run: |
           for f in AGENTS.md CLAUDE.md .cursorrules; do

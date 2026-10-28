@@ -30,7 +30,7 @@ Hypothese : moins de tokens.
 Risque : cout de maintenance, invisible dans les mesures de tokens.
 
 ### Dialecte compresse
-Hypothese : -30 a -50 % de tokens de sortie.
+Hypothese : moins de tokens de sortie.
 Candidat n1 au titre de placebo.
 
 ## Verdicts a rendre

@@ -1,4 +1,4 @@
-from tkn.audit import DEFAULTS, audit, render
+from tkn.audit import DEFAULTS, audit, has_failures, render
 
 
 def test_consigne_positive_est_signalee_comme_ambigue(tmp_path):
@@ -65,3 +65,11 @@ def test_init_couvre_tout_ce_que_l_audit_reclame(tmp_path):
     (tmp_path / ".codexignore").write_text(IGNORE_CONTENT)
     r = audit(tmp_path, DEFAULTS)
     assert r["uncovered_paths"] == []
+
+
+def test_mode_bloquant_detecte_les_problemes(tmp_path):
+    assert has_failures(audit(tmp_path, DEFAULTS)) is True
+    from tkn.init import IGNORE_CONTENT
+    (tmp_path / ".codexignore").write_text(IGNORE_CONTENT)
+    (tmp_path / "INDEX.md").write_text("")
+    assert has_failures(audit(tmp_path, DEFAULTS)) is False

@@ -1,23 +1,15 @@
 #!/usr/bin/env bash
-# Garde-fous tokens (token-diet). Doit rester identique a tkn/init.py:PRE_COMMIT.
 set -uo pipefail
-
 fail=0
-
 for f in AGENTS.md CLAUDE.md .cursorrules HANDOFF.md; do
   [ -f "$f" ] || continue
   n=$(wc -l < "$f" | tr -d ' ')
-  if [ "$n" -gt 60 ]; then
-    echo "tkn: $f = $n lignes (seuil 60, reinjecte a chaque tour)"
-    fail=1
-  fi
+  [ "$n" -gt 60 ] && { echo "tkn: $f = $n lignes (seuil 60)"; fail=1; }
 done
-
 while read -r f; do
   case "$f" in *.lock|*.map|*.min.js|*.min.css) continue ;; esac
   [ -f "$f" ] || continue
   n=$(wc -l < "$f" | tr -d ' ')
   [ "$n" -gt 300 ] && echo "tkn: $f = $n lignes, a decouper"
 done < <(git diff --cached --name-only --diff-filter=ACM)
-
-exit "$fail"
+exit $fail

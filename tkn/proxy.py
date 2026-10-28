@@ -10,6 +10,7 @@ Usage:
 """
 from __future__ import annotations
 import argparse
+import http.client
 import json
 import os
 import time
@@ -23,6 +24,8 @@ from tkn.rewrite import rewrite
 LOG_PATH = Path(os.environ.get("TKN_LOG", Path.home() / ".tkn" / "usage.jsonl"))
 STATS_PATH = Path.home() / ".tkn" / "proxy_stats.jsonl"
 RUN_FILE = Path.home() / ".tkn" / "current_run"
+STREAM_CHUNK_SIZE = 16 * 1024
+MAX_SSE_LINE = 1024 * 1024
 
 
 def current_run() -> str:
@@ -32,36 +35,66 @@ def current_run() -> str:
         return ""
 
 
+def _usage_from_obj(obj: dict, previous: dict | None = None) -> dict | None:
+    model = (previous or {}).get("model")
+    usage = (previous or {}).get("usage")
+    if isinstance(obj.get("response"), dict):
+        response = obj["response"]
+        model = response.get("model") or model
+        usage = response.get("usage") or usage
+    model = obj.get("model") or model
+    usage = obj.get("usage") or usage
+    return {"model": model, "usage": usage} if usage else previous
+
+
+class _SSEUsageParser:
+    """Extrait l'usage sans conserver le flux complet en memoire."""
+
+    def __init__(self) -> None:
+        self.pending = bytearray()
+        self.info: dict | None = None
+
+    def feed(self, chunk: bytes) -> None:
+        self.pending.extend(chunk)
+        while b"\n" in self.pending:
+            line, _, rest = self.pending.partition(b"\n")
+            self.pending = bytearray(rest)
+            self._line(line.rstrip(b"\r"))
+        if len(self.pending) > MAX_SSE_LINE:
+            self.pending.clear()
+
+    def finish(self) -> None:
+        if self.pending:
+            self._line(bytes(self.pending).rstrip(b"\r"))
+            self.pending.clear()
+
+    def _line(self, line: bytes) -> None:
+        if not line.startswith(b"data:"):
+            return
+        data = line[5:].strip()
+        if not data or data == b"[DONE]" or len(data) > MAX_SSE_LINE:
+            return
+        try:
+            obj = json.loads(data)
+        except json.JSONDecodeError:
+            return
+        if isinstance(obj, dict):
+            self.info = _usage_from_obj(obj, self.info)
+
+
 def _extract_usage(payload: bytes) -> dict | None:
     text = payload.decode("utf-8", "replace")
-    usage = model = None
     if "data:" in text:
-        for line in text.splitlines():
-            if not line.startswith("data:"):
-                continue
-            chunk = line[5:].strip()
-            if chunk in ("", "[DONE]"):
-                continue
-            try:
-                obj = json.loads(chunk)
-            except json.JSONDecodeError:
-                continue
-            # API Responses : l'usage arrive dans response.completed
-            if isinstance(obj.get("response"), dict):
-                r = obj["response"]
-                model = r.get("model") or model
-                usage = r.get("usage") or usage
-            model = obj.get("model") or model
-            usage = obj.get("usage") or usage
-        return {"model": model, "usage": usage} if usage else None
+        parser = _SSEUsageParser()
+        parser.feed(payload)
+        parser.finish()
+        return parser.info
 
     try:
         obj = json.loads(text)
     except json.JSONDecodeError:
         return None
-    if isinstance(obj.get("response"), dict):
-        obj = obj["response"]
-    return {"model": obj.get("model"), "usage": obj.get("usage")}
+    return _usage_from_obj(obj) if isinstance(obj, dict) else None
 
 
 def _fields(u: dict) -> tuple[int, int, int, int, int]:
@@ -76,9 +109,10 @@ def _fields(u: dict) -> tuple[int, int, int, int, int]:
             outd.get("reasoning_tokens", 0))
 
 
-def record(payload: bytes, label: str, req: dict | None, stats: dict, mode: str) -> None:
+def record(payload: bytes, label: str, req: dict | None, stats: dict, mode: str,
+           usage_info: dict | None = None) -> None:
     LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
-    info = _extract_usage(payload)
+    info = usage_info or _extract_usage(payload)
     if info and info.get("usage"):
         inp, cached, written, out, reasoning = _fields(info["usage"])
         entry = {"ts": time.time(), "label": label, "mode": mode,
@@ -125,7 +159,7 @@ class Handler(BaseHTTPRequestHandler):
         if raw:
             try:
                 req_data = json.loads(raw)
-                if req_data.get("stream"):
+                if self.mode == "actif" and req_data.get("stream"):
                     req_data.setdefault("stream_options", {})["include_usage"] = True
                 rewritten = rewrite(req_data, self.limit, stats, self.ansi_scope)
                 out_raw = (json.dumps(rewritten).encode()
@@ -180,16 +214,22 @@ class Handler(BaseHTTPRequestHandler):
             self.send_header(key, value)
         self.send_header("transfer-encoding", "chunked")
         self.end_headers()
-        buf = []
-        while True:
-            chunk = resp.read(4096)
-            if not chunk:
-                break
-            buf.append(chunk)
-            self.wfile.write(b"%X\r\n%s\r\n" % (len(chunk), chunk))
-        self.wfile.write(b"0\r\n\r\n")
-        self.wfile.flush()
-        record(b"".join(buf), label, req_data, stats, self.mode)
+        parser = _SSEUsageParser()
+        try:
+            while True:
+                chunk = resp.read1(STREAM_CHUNK_SIZE)
+                if not chunk:
+                    break
+                parser.feed(chunk)
+                self.wfile.write(b"%X\r\n%s\r\n" % (len(chunk), chunk))
+                self.wfile.flush()
+            parser.finish()
+            self.wfile.write(b"0\r\n\r\n")
+            self.wfile.flush()
+        except (OSError, http.client.HTTPException):
+            self.close_connection = True
+            return
+        record(b"", label, req_data, stats, self.mode, parser.info)
 
 
 def main() -> int:
