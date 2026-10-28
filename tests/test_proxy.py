@@ -61,6 +61,27 @@ def test_troncature_ne_depasse_pas_le_plafond():
     assert len(out["messages"][0]["content"]) <= 300
 
 
+def test_sortie_outil_codex_responses_est_tronquee():
+    long_text = "sortie " * 400
+    user_text = "consigne " * 400
+    data = {"input": [
+        {"type": "message", "role": "user",
+         "content": [{"type": "input_text", "text": user_text}]},
+        {"type": "custom_tool_call_output", "call_id": "call-1",
+         "output": [{"type": "input_text", "text": long_text},
+                    {"type": "metadata", "value": "intact"}]},
+    ]}
+
+    stats = _stats()
+    out = rewrite(copy.deepcopy(data), limit=300, stats=stats)
+
+    assert out["input"][0] == data["input"][0]
+    assert len(out["input"][1]["output"][0]["text"]) <= 300
+    assert out["input"][1]["output"][1] == data["input"][1]["output"][1]
+    assert stats["truncated"] == 1
+    assert stats["chars_saved"] > 0
+
+
 # ---------------------------------------------------------- lecture d'usage
 
 def test_usage_stream_chat_completions():
@@ -132,12 +153,12 @@ class _QuietHandler(BaseHTTPRequestHandler):
         pass
 
 
-def _proxy_handler(upstream):
+def _proxy_handler(upstream, mode="observe"):
     class TestProxy(proxy.Handler):
         pass
 
     TestProxy.upstream = upstream
-    TestProxy.mode = "observe"
+    TestProxy.mode = mode
     return TestProxy
 
 
@@ -171,10 +192,40 @@ def test_observe_transmet_le_corps_octet_pour_octet(tmp_path, monkeypatch):
     assert received == [raw]
 
 
+def test_mode_actif_n_ajoute_pas_stream_options_aux_responses(tmp_path, monkeypatch):
+    received = []
+
+    class Upstream(_QuietHandler):
+        def do_POST(self):
+            received.append(self.rfile.read(int(self.headers["content-length"])))
+            payload = b'{"model":"x","usage":{"input_tokens":1}}'
+            self.send_response(200)
+            self.send_header("content-type", "application/json")
+            self.send_header("content-length", str(len(payload)))
+            self.end_headers()
+            self.wfile.write(payload)
+
+    monkeypatch.setattr(proxy, "LOG_PATH", tmp_path / "usage.jsonl")
+    monkeypatch.setattr(proxy, "STATS_PATH", tmp_path / "stats.jsonl")
+    raw = b'{"model":"x","stream":true,"input":[]}'
+    with _running_server(Upstream) as upstream:
+        url = f"http://127.0.0.1:{upstream.server_port}"
+        with _running_server(_proxy_handler(url, "actif")) as server:
+            conn = http.client.HTTPConnection("127.0.0.1", server.server_port, timeout=2)
+            conn.request("POST", "/responses", raw,
+                         {"content-type": "application/json"})
+            response = conn.getresponse()
+            response.read()
+            conn.close()
+
+    assert "stream_options" not in json.loads(received[0])
+
+
 def test_sse_est_transmis_progressivement_et_usage_enregistre(tmp_path, monkeypatch):
     first_sent = threading.Event()
     release_second = threading.Event()
     received = []
+    statuses = []
     first = b'data: {"type":"response.output_text.delta","delta":"un"}\n\n'
     second = (b'data: {"type":"response.completed","response":{"model":"x",'
               b'"usage":{"input_tokens":7,"output_tokens":2}}}\n\n')
@@ -199,7 +250,12 @@ def test_sse_est_transmis_progressivement_et_usage_enregistre(tmp_path, monkeypa
     raw = b'{"model":"x","stream":true}'
     with _running_server(Upstream) as upstream:
         url = f"http://127.0.0.1:{upstream.server_port}"
-        with _running_server(_proxy_handler(url)) as server:
+        class ObservedProxy(_proxy_handler(url)):
+            def send_response(self, code, message=None):
+                statuses.append(code)
+                super().send_response(code, message)
+
+        with _running_server(ObservedProxy) as server:
             conn = http.client.HTTPConnection("127.0.0.1", server.server_port, timeout=2)
             conn.request("POST", "/v1/responses", raw,
                          {"content-type": "application/json"})
@@ -222,6 +278,7 @@ def test_sse_est_transmis_progressivement_et_usage_enregistre(tmp_path, monkeypa
         time.sleep(0.01)
     entry = json.loads((tmp_path / "usage.jsonl").read_text())
     assert (entry["model"], entry["input"], entry["output"]) == ("x", 7, 2)
+    assert statuses == [200]
 
 
 def test_analyse_sse_borne_sa_memoire():
@@ -255,3 +312,11 @@ def test_relay_ferme_la_connexion_si_le_client_interrompt():
     handler.close_connection = False
     handler._relay(Response(), "", None, {})
     assert handler.close_connection is True
+
+
+def test_record_cree_le_dossier_de_statistiques(tmp_path, monkeypatch):
+    monkeypatch.setattr(proxy, "LOG_PATH", tmp_path / "usage.jsonl")
+    stats_path = tmp_path / "autre-dossier" / "stats.jsonl"
+    monkeypatch.setattr(proxy, "STATS_PATH", stats_path)
+    proxy.record(b"{}", "test", None, {"chars_saved": 0}, "observe")
+    assert stats_path.exists()
