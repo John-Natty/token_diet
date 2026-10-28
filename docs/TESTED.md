@@ -1,44 +1,22 @@
-# Ce qu'on a teste
+# Ce qu'on a testé
 
-Aucun resultat chiffre pour l'instant : c'est un protocole, pas un bilan.
-Les verdicts ci-dessous sont des INTENTIONS, pas des mesures.
+## Troncature des sorties d'outils
 
-## Format
+Hypothèse : le proxy actif avec un plafond de 1 000 caractères réduit la
+consommation de tokens des tâches de développement.
 
-    ### <levier>
-    Hypothese :
-    Methode : tache, modele, repetitions
-    Resultat : chiffre + variance
-    Verdict : retenu | ecarte | a retester
+Méthode : trois tâches Python externes, trois sessions indépendantes par tâche
+et condition, `gpt-6-sol` en effort `medium`, clones issus du même commit,
+prompts et outils identiques. Les neuf runs actifs retenus ont tous eu des
+sorties d'outils réellement tronquées. Détails et résultats bruts :
+[BENCHMARKS.md](BENCHMARKS.md).
 
-## A tester
+Résultat : les 18 runs retenus ont réussi les tests d'acceptation. Les runs
+actifs ont consommé en moyenne 176 837 tokens d'entrée contre 124 240 en
+baseline, avec une durée moyenne de 77,8 s contre 48,0 s. Les crédits facturés
+par run ne sont pas disponibles; les caractères retirés ne mesurent pas une
+économie de crédits.
 
-### Troncature des sorties d'outils
-Hypothese : gain de volume immediat.
-Methode : `tkn proxy` en observation, puis `tkn report --stats`.
-Limite : comparer des tailles prouve une baisse de VOLUME. Ca ne prouve ni
-une baisse de facture, ni le maintien du taux de reussite. Il faut les deux.
-
-### "Ne relis jamais un fichier"
-Hypothese : gain de contexte.
-Risque : erreurs sur des fichiers modifies, donc allers-retours qui coutent
-plus que la relecture economisee.
-C'est l'intuition la plus faible du lot.
-
-### Zero prose / noms courts
-Hypothese : moins de tokens.
-Risque : cout de maintenance, invisible dans les mesures de tokens.
-
-### Dialecte compresse
-Hypothese : moins de tokens de sortie.
-Candidat n1 au titre de placebo.
-
-## Verdicts a rendre
-
-| Levier | Mesure ? |
-|---|---|
-| Troncature des sorties d'outils | non |
-| Ne pas relire | non |
-| Zero prose | non |
-| Noms courts | non |
-| Dialecte compresse | non |
+Verdict : aucune économie de tokens observée dans cette série. Le coût moyen
+facturé par tâche réussie ne peut pas être évalué sans relevé de facturation.
+Les autres leviers de Token Diet n'ont pas été évalués dans cette expérience.

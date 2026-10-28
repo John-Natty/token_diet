@@ -127,6 +127,7 @@ def record(payload: bytes, label: str, req: dict | None, stats: dict, mode: str,
         stats["ts"] = time.time()
         stats["label"] = label
         stats["mode"] = mode
+        STATS_PATH.parent.mkdir(parents=True, exist_ok=True)
         with STATS_PATH.open("a") as fh:
             fh.write(json.dumps(stats) + "\n")
 
@@ -148,6 +149,15 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         self._forward("POST")
 
+    def _write_payload(self, payload: bytes) -> bool:
+        try:
+            self.wfile.write(payload)
+            self.wfile.flush()
+            return True
+        except (BrokenPipeError, ConnectionResetError):
+            self.close_connection = True
+            return False
+
     def _forward(self, method: str) -> None:
         length = int(self.headers.get("content-length") or 0)
         raw = self.rfile.read(length) if length else b""
@@ -159,7 +169,8 @@ class Handler(BaseHTTPRequestHandler):
         if raw:
             try:
                 req_data = json.loads(raw)
-                if self.mode == "actif" and req_data.get("stream"):
+                is_chat = self.path.rstrip("/").endswith("/chat/completions")
+                if self.mode == "actif" and is_chat and req_data.get("stream"):
                     req_data.setdefault("stream_options", {})["include_usage"] = True
                 rewritten = rewrite(req_data, self.limit, stats, self.ansi_scope)
                 out_raw = (json.dumps(rewritten).encode()
@@ -189,22 +200,22 @@ class Handler(BaseHTTPRequestHandler):
                         self.send_header(key, value)
                     self.send_header("content-length", str(len(payload)))
                     self.end_headers()
-                    self.wfile.write(payload)
-                    record(payload, label, req_data, stats, self.mode)
+                    if self._write_payload(payload):
+                        record(payload, label, req_data, stats, self.mode)
         except urllib.error.HTTPError as exc:
             payload = exc.read()
             self.send_response(exc.code)
             self.send_header("content-type", "application/json")
             self.send_header("content-length", str(len(payload)))
             self.end_headers()
-            self.wfile.write(payload)
+            self._write_payload(payload)
         except Exception as exc:  # noqa: BLE001
             msg = json.dumps({"error": {"message": str(exc)}}).encode()
             self.send_response(502)
             self.send_header("content-type", "application/json")
             self.send_header("content-length", str(len(msg)))
             self.end_headers()
-            self.wfile.write(msg)
+            self._write_payload(msg)
 
     def _relay(self, resp, label, req_data, stats) -> None:
         self.send_response(resp.status)

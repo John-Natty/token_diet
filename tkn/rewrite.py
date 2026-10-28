@@ -9,7 +9,7 @@ import re
 ANSI = re.compile(r"\x1b\[[0-9;?]*[A-Za-z]")
 TEXT_TYPES = {"text", "input_text", "output_text"}
 TOOL_ROLES = {"tool", "function"}
-TOOL_TYPES = {"function_call_output", "tool_result"}
+TOOL_TYPES = {"function_call_output", "custom_tool_call_output", "tool_result"}
 
 MIN_KEEP = 20   # en dessous, un marqueur coute plus qu'il n'explique
 
@@ -107,5 +107,14 @@ def rewrite(data: dict, limit: int, stats: dict, ansi_scope: str = "tool") -> di
 
         if tool and isinstance(msg.get("output"), str):
             msg["output"] = rewrite_text(msg["output"], cap, stats)
+        elif tool and isinstance(msg.get("output"), list):
+            output = []
+            for part in msg["output"]:
+                if (isinstance(part, dict) and part.get("type") in TEXT_TYPES
+                        and isinstance(part.get("text"), str)):
+                    output.append({**part, "text": rewrite_text(part["text"], cap, stats)})
+                else:
+                    output.append(part)
+            msg["output"] = output
 
     return data

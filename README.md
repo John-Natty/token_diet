@@ -32,11 +32,14 @@ zéro prose, noms courts, ne pas relire, dialecte compressé.
 
 ## Installation
 
-    git clone https://github.com/<toi>/token-diet
-    cd token-diet
-    pip install -e .          # optionnel
-    pip install -e '.[exact]' # tiktoken, pour un comptage non estimé
-    pytest -q
+    git clone https://github.com/John-Natty/token_diet.git
+    cd token_diet
+    python3 -m pip install -e '.[dev]'
+    python3 -m pytest -q
+
+Pour un comptage exact, installe aussi l'extra optionnel `exact` :
+
+    python3 -m pip install -e '.[exact]'
 
 ## Commandes
 
@@ -60,18 +63,38 @@ zéro prose, noms courts, ne pas relire, dialecte compressé.
 
 Mesurer une technique :
 
-    tkn bench start --label refactor-auth --model gpt-6.1-sol
+    tkn bench start --label refactor-auth --model gpt-6-sol
     # ... tu executes la tache ...
     tkn bench end --tests pass
     tkn bench snapshot apres.json
 
-Le proxy, d'abord en observation :
+Le proxy démarre en observation avec `tkn proxy --port 8787`. Ce mode ne
+réduit pas les requêtes transmises : il journalise seulement ce qu'une
+réécriture aurait changé. Le mode actif applique la réécriture et doit être
+explicitement activé :
 
-    tkn proxy --port 8787
-    export OPENAI_BASE_URL=http://127.0.0.1:8787/v1
-    tkn report --stats          # ce qu'il AURAIT coupe
+    tkn proxy --port 8787 --mode actif
 
-Puis `--mode actif` quand les chiffres te convainquent.
+Vérifie que ton client Codex route réellement ses requêtes vers le proxy.
+Ne présume pas que `OPENAI_BASE_URL` est pris en charge par chaque version ou
+configuration de Codex. Pour Codex CLI, un fournisseur explicite dans
+`config.toml` permet de définir `base_url` et `wire_api`; vérifie le trafic
+reçu par Token Diet avant de comparer les résultats.
+
+## Benchmarks réels
+
+Compare des sessions indépendantes repartant du même commit, avec le même
+modèle, le même niveau d'effort, les mêmes outils et le même prompt. Répète
+chaque condition au moins trois fois et alterne leur ordre. Consigne les
+tokens entrée, sortie et cache, la durée, les tests, les reprises et la preuve
+que le mode actif a réellement modifié une requête. Calcule le coût moyen par
+tâche correctement terminée seulement avec des coûts réellement mesurés.
+
+Les caractères supprimés et l'estimation `caractères / 4` ne sont pas des
+économies facturées. La première série réelle avec `gpt-6-sol` en effort
+`medium` n'a pas montré de baisse des tokens consommés. Les données de coût
+facturé sont indisponibles. Le protocole et les résultats sont dans
+[`docs/BENCHMARKS.md`](docs/BENCHMARKS.md).
 
 ## Principes
 
